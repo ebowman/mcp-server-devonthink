@@ -57,7 +57,7 @@ describe("DevonThinkTool", () => {
         },
       });
 
-      const result = await tool.run({ value: "test" });
+      const result = await (tool.run as any)({ value: "test" });
 
       expect(result).toEqual({
         success: true,
@@ -80,7 +80,7 @@ describe("DevonThinkTool", () => {
         },
       });
 
-      await expect(tool.run({ invalid: "field" })).rejects.toThrow();
+      await expect((tool.run as any)({ invalid: "field" })).rejects.toThrow();
     });
   });
 
@@ -100,7 +100,7 @@ describe("DevonThinkTool", () => {
       });
 
       vi.mocked(executeModule.executeJxa).mockResolvedValueOnce({ success: true });
-      await tool.run({});
+      await (tool.run as any)({});
     });
 
     describe("formatValue", () => {
@@ -255,7 +255,7 @@ describe("DevonThinkTool", () => {
       });
 
       vi.mocked(executeModule.executeJxa).mockResolvedValueOnce({ success: true });
-      await tool.run({});
+      await (tool.run as any)({});
     });
 
     it("should escape strings properly in formatValue", () => {
@@ -308,7 +308,7 @@ describe("DevonThinkTool", () => {
         processedString: "it's working properly" 
       });
 
-      const result = await tool.run({ 
+      const result = await (tool.run as any)({ 
         problematicString: "it's working properly" 
       });
 

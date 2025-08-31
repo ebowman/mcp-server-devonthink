@@ -1,0 +1,230 @@
+name: pr-quality-review
+description: Thorough quality review of PRs 1-4 for upstream submission
+execute: true
+auto_spawn: true
+
+agents:
+  - id: pr1-reviewer
+    role: PR1 Quality Inspector
+    goal: Review PR1 (Enhanced error handling and tool migration) for quality and necessity
+    context: |
+      You are reviewing PR1 (commit d5fe9ce to bba993d) which introduced enhanced error handling.
+      
+      Review criteria:
+      1. CLEANLINESS: No debug code, commented code, or development artifacts
+      2. LOGICALNESS: Each change has clear purpose and follows patterns
+      3. SIMPLICITY: No over-engineering, clear and readable code
+      4. NECESSITY: Every line changed serves a real purpose
+      5. QUALITY: Proper error handling, testing, documentation
+      6. COHERENCE: Changes work together as unified improvement
+      
+      Focus areas for PR1:
+      - Error classification system (critical/recoverable/user errors)
+      - Retry logic implementation  
+      - Tool migration to new error handling
+      - Test coverage additions
+      
+      Check for:
+      - Unnecessary complexity in error handling
+      - Redundant error classifications
+      - Over-broad catch blocks
+      - Missing error cases
+      - Inconsistent error messages
+      - Debug/console.log statements
+      
+      Output a detailed report with:
+      - Files that need cleanup
+      - Specific lines that are problematic
+      - Recommendations for improvement
+      - Risk assessment for upstream review
+    tools:
+      - Read
+      - Grep
+      - Bash(git diff)
+      - Bash(git log)
+      - Bash(git show)
+
+  - id: pr2-reviewer
+    role: PR2 Quality Inspector  
+    goal: Review PR2 (Tool framework standardization) for architectural coherence
+    context: |
+      You are reviewing PR2 (commits 37f1452 to dbaf62c) which standardized the tool framework.
+      
+      Review criteria:
+      1. CLEANLINESS: No leftover refactoring artifacts
+      2. LOGICALNESS: Framework design makes sense and is consistent
+      3. SIMPLICITY: Not over-abstracted, easy to understand
+      4. NECESSITY: Each abstraction layer has clear value
+      5. QUALITY: Proper TypeScript types, error handling
+      6. COHERENCE: All tools consistently use the framework
+      
+      Focus areas for PR2:
+      - DevonThinkTool base class design
+      - JXA script builder utilities
+      - Helper functions and formatters
+      - Tool migration completeness
+      
+      Check for:
+      - Incomplete tool migrations
+      - Inconsistent use of helpers
+      - Over-abstraction in base class
+      - Missing TypeScript types
+      - Unused framework features
+      - Breaking changes to existing tools
+      
+      Output a detailed report with:
+      - Framework design issues
+      - Incomplete migrations
+      - Abstraction concerns
+      - Specific improvements needed
+    tools:
+      - Read
+      - Grep
+      - Bash(git diff)
+      - Bash(git log)
+      - Bash(git show)
+
+  - id: pr3-reviewer
+    role: PR3 Quality Inspector
+    goal: Review PR3 (Tool framework implementation) for completeness and consistency
+    context: |
+      You are reviewing PR3 (commits ede98db to 8a7ddfb) which implemented the standardized framework.
+      
+      Review criteria:
+      1. CLEANLINESS: No migration artifacts or old code
+      2. LOGICALNESS: Consistent application of framework
+      3. SIMPLICITY: Tools aren't more complex than before
+      4. NECESSITY: Framework actually improves the code
+      5. QUALITY: All tools properly tested
+      6. COHERENCE: Framework used uniformly across all tools
+      
+      Focus areas for PR3:
+      - Complete tool migration to DevonThinkTool
+      - Test suite updates
+      - Documentation updates
+      - Removal of old implementations
+      
+      Check for:
+      - Tools still using old patterns
+      - Inconsistent framework usage
+      - Missing test updates
+      - Documentation gaps
+      - Temporary migration code
+      - vim undo files (.un~)
+      
+      Output a detailed report with:
+      - Migration completeness assessment
+      - Pattern consistency issues
+      - Test coverage gaps
+      - Cleanup needed
+    tools:
+      - Read
+      - Grep
+      - Bash(git diff)
+      - Bash(git log)
+      - Bash(git show)
+
+  - id: pr4-reviewer
+    role: PR4/AI Branch Quality Inspector
+    goal: Review AI service integration branch for production readiness
+    context: |
+      You are reviewing the AI service integration branch (commits after 8a7ddfb) which adds AI tools.
+      
+      Review criteria:
+      1. CLEANLINESS: No development artifacts, test files, or experiments
+      2. LOGICALNESS: AI integration makes architectural sense
+      3. SIMPLICITY: Not over-engineered, clear API usage
+      4. NECESSITY: Each AI tool has clear purpose
+      5. QUALITY: Proper error handling for AI failures
+      6. COHERENCE: Consistent with existing tool patterns
+      
+      Focus areas for AI branch:
+      - AI tool implementations
+      - API usage patterns (summarizeContentsOf, classify, compare)
+      - Error handling for AI services
+      - Test coverage for AI tools
+      - Documentation completeness
+      
+      Check for:
+      - Development/test files (test-*.ts, *.un~, etc.)
+      - Experimental code or features
+      - Inconsistent AI API usage
+      - Missing AI service checks
+      - Incomplete error handling
+      - Unused AI service layer code
+      - Documentation artifacts
+      
+      Output a detailed report with:
+      - Files that shouldn't be in PR
+      - AI implementation issues
+      - Error handling gaps
+      - Documentation problems
+    tools:
+      - Read
+      - Grep
+      - Bash(git diff)
+      - Bash(git log)
+      - Bash(git show)
+      - Bash(git status)
+
+  - id: cross-pr-reviewer
+    role: Cross-PR Coherence Inspector
+    goal: Review how PRs build on each other and identify conflicts
+    context: |
+      You are reviewing how PRs 1-4 build on each other and checking for issues between them.
+      
+      Review criteria:
+      1. DEPENDENCY: Each PR properly builds on previous
+      2. CONFLICTS: No conflicting changes between PRs
+      3. PROGRESSION: Clear logical progression of improvements
+      4. COMPLETENESS: No missing pieces between PRs
+      5. ATOMICITY: Each PR is self-contained and complete
+      6. TESTABILITY: Each PR can be tested independently
+      
+      Focus areas:
+      - How error handling (PR1) integrates with framework (PR2/3)
+      - How AI tools (PR4) use the standardized framework
+      - Consistent patterns across all PRs
+      - No regressions between PRs
+      
+      Check for:
+      - Features added then removed
+      - Patterns introduced then changed
+      - Incomplete refactorings across PRs
+      - Test coverage gaps between PRs
+      - Documentation inconsistencies
+      
+      Output a detailed report with:
+      - Inter-PR dependencies and issues
+      - Recommended PR restructuring if needed
+      - Missing pieces between PRs
+      - Overall coherence assessment
+    tools:
+      - Read
+      - Grep
+      - Bash(git diff)
+      - Bash(git log)
+      - Bash(git cherry)
+      - Bash(git rev-list)
+
+coordination:
+  type: parallel
+  completion: all
+  summary_agent: report-compiler
+  
+summary:
+  agent: report-compiler
+  role: Compile comprehensive quality report
+  goal: Create actionable report for fixing issues before upstream submission
+  context: |
+    Compile all reviewer reports into a comprehensive action plan.
+    
+    Create:
+    1. CRITICAL ISSUES: Must fix before submission (would cause rejection)
+    2. IMPORTANT ISSUES: Should fix for quality (would raise questions)  
+    3. MINOR ISSUES: Nice to fix but not blocking
+    4. PR RESTRUCTURING: If PRs need to be reorganized
+    5. ACTION PLAN: Specific steps to fix all issues
+    
+    Be extremely thorough - the upstream maintainer will scrutinize every line.
+    Flag anything that could cause rejection or lengthy review cycles.

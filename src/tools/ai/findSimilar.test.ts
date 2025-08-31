@@ -53,7 +53,7 @@ describe("findSimilarTool", () => {
 
     vi.mocked(executeModule.executeJxa).mockResolvedValueOnce(mockResponse);
 
-    const result = await findSimilarTool.run({
+    const result = await (findSimilarTool.run as any)({
       recordUuid: "source-uuid",
       maxResults: 10,
       minScore: 0.5
@@ -76,7 +76,7 @@ describe("findSimilarTool", () => {
 
     vi.mocked(executeModule.executeJxa).mockResolvedValueOnce(mockResponse);
 
-    const result = await findSimilarTool.run({
+    const result = await (findSimilarTool.run as any)({
       recordUuid: "invalid-uuid"
     });
 
@@ -95,7 +95,7 @@ describe("findSimilarTool", () => {
 
     vi.mocked(executeModule.executeJxa).mockResolvedValueOnce(mockResponse);
 
-    await findSimilarTool.run({
+    await (findSimilarTool.run as any)({
       recordUuid: "uuid1",
       databaseName: "Specific Database"
     });
@@ -105,17 +105,17 @@ describe("findSimilarTool", () => {
   });
 
   it("should validate input schema", async () => {
-    await expect(findSimilarTool.run({
+    await expect((findSimilarTool.run as any)({
       // Missing required recordUuid
       maxResults: 5
     })).rejects.toThrow();
 
-    await expect(findSimilarTool.run({
+    await expect((findSimilarTool.run as any)({
       recordUuid: "uuid1",
       maxResults: "invalid" // Should be number
     })).rejects.toThrow();
 
-    await expect(findSimilarTool.run({
+    await expect((findSimilarTool.run as any)({
       recordUuid: "uuid1",
       minScore: 1.5 // Should be 0-1
     })).rejects.toThrow();
@@ -129,7 +129,7 @@ describe("findSimilarTool", () => {
 
     vi.mocked(executeModule.executeJxa).mockResolvedValueOnce(mockResponse);
 
-    const result = await findSimilarTool.run({
+    const result = await (findSimilarTool.run as any)({
       recordUuid: "uuid1"
     });
 
@@ -139,7 +139,7 @@ describe("findSimilarTool", () => {
   });
 
   it("should filter results by minimum score", async () => {
-    await findSimilarTool.run({
+    await (findSimilarTool.run as any)({
       recordUuid: "uuid1",
       minScore: 0.8 // High threshold
     });

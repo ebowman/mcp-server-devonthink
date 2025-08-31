@@ -7,8 +7,6 @@ import {
   ClassificationProposal,
   SummarizeRequest,
   SummarizeTextRequest,
-  TranscribeRequest,
-  TranscriptionResult,
   ChatEngine,
   AIServiceHealth,
   DevonThinkAIError
@@ -102,28 +100,6 @@ export class DevonThinkAIService {
       throw new DevonThinkAIError(
         `Failed to summarize text: ${error instanceof Error ? error.message : String(error)}`,
         'summarizeText',
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  /**
-   * Transcribe audio/video record
-   */
-  public async transcribeRecord(request: TranscribeRequest): Promise<TranscriptionResult> {
-    try {
-      const script = this.buildTranscribeScript(request);
-      const result = await executeJxa<any>(script);
-      
-      if (!result.success) {
-        throw new DevonThinkAIError(result.error || 'Transcription failed', 'transcribeRecord');
-      }
-
-      return result.transcription;
-    } catch (error) {
-      throw new DevonThinkAIError(
-        `Failed to transcribe record: ${error instanceof Error ? error.message : String(error)}`,
-        'transcribeRecord',
         error instanceof Error ? error : undefined
       );
     }
@@ -399,46 +375,6 @@ export class DevonThinkAIService {
     `;
   }
 
-  /**
-   * Build JXA script for transcription
-   */
-  private buildTranscribeScript(request: TranscribeRequest): string {
-    const { recordUuid, language, timestamps } = request;
-    
-    return `
-      (() => {
-        const theApp = Application("DEVONthink");
-        theApp.includeStandardAdditions = true;
-        
-        try {
-          const record = theApp.getRecordWithUuid("${escapeStringForJXA(recordUuid)}");
-          if (!record) {
-            throw new Error("Record not found with UUID: ${escapeStringForJXA(recordUuid)}");
-          }
-          
-          const options = {};
-          ${language ? `options["language"] = "${escapeStringForJXA(language)}";` : ''}
-          ${timestamps !== undefined ? `options["timestamps"] = ${timestamps};` : ''}
-          
-          const transcription = theApp.transcribe(record, options);
-          
-          return JSON.stringify({
-            success: true,
-            transcription: {
-              text: transcription.text || transcription.toString(),
-              confidence: transcription.confidence,
-              language: transcription.language
-            }
-          });
-        } catch (error) {
-          return JSON.stringify({
-            success: false,
-            error: error.toString()
-          });
-        }
-      })();
-    `;
-  }
 }
 
 /**

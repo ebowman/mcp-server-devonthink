@@ -1,0 +1,161 @@
+name: "MCP Server UX Changes Analysis"
+description: "Analyze user experience changes across 4 PRs for the DEVONthink MCP server"
+author: "Claude"
+created: "2024-01-31"
+version: "1.0.0"
+
+# Configuration
+config:
+  max_parallel: 4
+  continue_on_error: true
+  output_format: "markdown"
+  
+# Context to share with all agents
+shared_context: |
+  We are analyzing 4 pull requests for a DEVONthink MCP (Model Context Protocol) server.
+  
+  The PRs build on each other:
+  - PR1: JXA builder foundation (feature/jxa-builder)
+  - PR2: Enhanced error handling and tool migration (feature/error-handling-and-migration)
+  - PR3: Tool framework standardization (feature/tool-standardization)
+  - PR4: AI service integration (feature/ai-service-integration)
+  
+  Focus on USER-FACING changes - what actually changes for someone using the MCP server through Claude Desktop or another MCP client.
+  
+  Consider:
+  - New capabilities/tools available
+  - Error message improvements  
+  - Response format changes
+  - Performance improvements
+  - Reliability improvements
+  - API changes that affect usage
+  - Documentation improvements that help users
+
+# Individual agent tasks
+agents:
+  - name: "PR1_Analyzer"
+    role: "Analyze PR1 UX changes"
+    instructions: |
+      Analyze the feature/jxa-builder branch (PR1) for user experience changes.
+      
+      Check commits:
+      - 19e4e29 Remove unused addFunction method
+      - e1009e8 Add testing infrastructure 
+      - d5fe9ce Add testing infrastructure to PR1
+      
+      Look for:
+      1. Any new user-facing features or tools
+      2. Changes to existing tool behavior
+      3. Error handling improvements
+      4. Performance or reliability changes
+      5. Changes to response formats
+      
+      Be specific about what changed from the user's perspective.
+      If "literally nothing" changed for users, state that clearly.
+    
+  - name: "PR2_Analyzer"
+    role: "Analyze PR2 UX changes"
+    instructions: |
+      Analyze the feature/error-handling-and-migration branch (PR2) for user experience changes.
+      
+      Check commits:
+      - bba993d Enhanced error handling and tool migration
+      - 9c02268 Add comprehensive test suite
+      - 37f1452 Enhanced error handling and tool migration
+      - dbaf62c Fix critical error classification bug
+      - 0b0de48 Apply PR1 improvements to PR2
+      - 4df36e8, 6e2f66f Update execute.ts
+      - ede98db Remove debug and temporary development files
+      
+      Look for:
+      1. Error message improvements - are errors clearer?
+      2. Better error recovery or handling
+      3. Tool migration effects on users
+      4. Any new capabilities
+      5. Reliability improvements from bug fixes
+      
+      Focus on what actually changes for end users.
+
+  - name: "PR3_Analyzer"
+    role: "Analyze PR3 UX changes"
+    instructions: |
+      Analyze the feature/tool-standardization branch (PR3) for user experience changes.
+      
+      Check commits:
+      - 8a7ddfb Implement tool framework standardization
+      - ee2f177 Add warning about executeJxa single quote fragility
+      - 02b4940 Add test coverage for object formatting
+      - 8362e3f Extract repeated test setup
+      - f419764 Remove unused resultType property
+      
+      Look for:
+      1. Changes to how tools behave or respond
+      2. Consistency improvements across tools
+      3. New tools added (isRunning, createRecord converted)
+      4. Error handling standardization effects
+      5. Performance or reliability improvements
+      
+      Note if the standardization is purely internal with no user impact.
+
+  - name: "PR4_Analyzer"
+    role: "Analyze PR4 UX changes"
+    instructions: |
+      Analyze the feature/ai-service-integration branch (PR4) for user experience changes.
+      
+      This is the BIG one - adds AI capabilities!
+      
+      New tools added:
+      - check_ai_health: Verify AI services are available
+      - ask_ai_about_documents: Ask questions about DEVONthink documents
+      - create_summary_document: Create AI-powered summaries
+      - classify_document: Get AI classification suggestions
+      - find_similar: Find similar documents using AI
+      
+      Analyze:
+      1. New AI capabilities and what they enable
+      2. How these tools enhance the MCP server experience
+      3. Any changes to existing tools
+      4. Integration quality - do the tools work smoothly?
+      5. Documentation/discoverability of new features
+      
+      This should have MAJOR user-facing improvements!
+
+# Synthesis step
+synthesis:
+  agent_name: "UX_Synthesizer"
+  instructions: |
+    Synthesize the findings from all 4 PR analyzers into a comprehensive UX changelog.
+    
+    Create a structured report with:
+    
+    # DEVONthink MCP Server - User Experience Evolution
+    
+    ## PR1: JXA Builder Foundation
+    - Summary of UX impact (likely minimal)
+    - Any user-facing changes
+    
+    ## PR2: Enhanced Error Handling
+    - Error message improvements
+    - Reliability enhancements
+    - Bug fixes that affect users
+    
+    ## PR3: Tool Standardization
+    - Consistency improvements
+    - New/updated tools
+    - Performance benefits
+    
+    ## PR4: AI Service Integration
+    - New AI capabilities (list each tool)
+    - Use cases enabled
+    - Integration quality
+    
+    ## Overall UX Journey
+    - Evolution from basic to AI-powered
+    - Key improvements for users
+    - Remaining gaps or issues
+    
+    Be honest about which PRs had minimal user impact vs major improvements.
+    
+output:
+  file: "UX_CHANGES_REPORT.md"
+  format: "markdown"
