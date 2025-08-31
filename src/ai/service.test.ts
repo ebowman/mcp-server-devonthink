@@ -189,41 +189,6 @@ describe('DevonThinkAIService', () => {
     });
   });
 
-  describe('summarizeText', () => {
-    it('should summarize text successfully', async () => {
-      const mockResponse = {
-        success: true,
-        summary: 'This is a brief summary of the text.'
-      };
-
-      vi.mocked(executeModule.executeJxa).mockResolvedValueOnce(mockResponse);
-
-      const result = await service.summarizeText({
-        text: 'This is a long text that needs to be summarized...',
-        summaryStyle: 'brief'
-      });
-
-      expect(result).toBe('This is a brief summary of the text.');
-
-      const calledScript = vi.mocked(executeModule.executeJxa).mock.calls[0][0];
-      expect(calledScript).toContain('summarizeText');
-      expect(calledScript).toContain('brief');
-    });
-
-    it('should handle text summarization errors', async () => {
-      const mockResponse = {
-        success: false,
-        error: 'Text too short to summarize'
-      };
-
-      vi.mocked(executeModule.executeJxa).mockResolvedValueOnce(mockResponse);
-
-      await expect(service.summarizeText({
-        text: 'Short text'
-      })).rejects.toThrow('Text too short to summarize');
-    });
-  });
-
   describe('checkHealth', () => {
     it('should return healthy status when AI is available', async () => {
       const mockResponse = {

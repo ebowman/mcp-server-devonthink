@@ -6,7 +6,6 @@ import {
   ClassifyRequest,
   ClassificationProposal,
   SummarizeRequest,
-  SummarizeTextRequest,
   ChatEngine,
   AIServiceHealth,
   DevonThinkAIError
@@ -78,28 +77,6 @@ export class DevonThinkAIService {
       throw new DevonThinkAIError(
         `Failed to summarize records: ${error instanceof Error ? error.message : String(error)}`,
         'summarizeRecords',
-        error instanceof Error ? error : undefined
-      );
-    }
-  }
-
-  /**
-   * Summarize text content
-   */
-  public async summarizeText(request: SummarizeTextRequest): Promise<string> {
-    try {
-      const script = this.buildSummarizeTextScript(request);
-      const result = await executeJxa<any>(script);
-      
-      if (!result.success) {
-        throw new DevonThinkAIError(result.error || 'Text summarization failed', 'summarizeText');
-      }
-
-      return result.summary;
-    } catch (error) {
-      throw new DevonThinkAIError(
-        `Failed to summarize text: ${error instanceof Error ? error.message : String(error)}`,
-        'summarizeText',
         error instanceof Error ? error : undefined
       );
     }
@@ -333,37 +310,6 @@ export class DevonThinkAIService {
               uuid: summary.uuid ? summary.uuid() : undefined,
               content: summary.plainText ? summary.plainText() : summary.toString()
             }
-          });
-        } catch (error) {
-          return JSON.stringify({
-            success: false,
-            error: error.toString()
-          });
-        }
-      })();
-    `;
-  }
-
-  /**
-   * Build JXA script for text summarization
-   */
-  private buildSummarizeTextScript(request: SummarizeTextRequest): string {
-    const { text, summaryStyle } = request;
-    
-    return `
-      (() => {
-        const theApp = Application("DEVONthink");
-        theApp.includeStandardAdditions = true;
-        
-        try {
-          const options = {};
-          ${summaryStyle ? `options["as"] = "${escapeStringForJXA(summaryStyle)}";` : ''}
-          
-          const summary = theApp.summarizeText("${escapeStringForJXA(text)}", options);
-          
-          return JSON.stringify({
-            success: true,
-            summary: summary || ""
           });
         } catch (error) {
           return JSON.stringify({
