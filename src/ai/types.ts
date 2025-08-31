@@ -81,24 +81,6 @@ export interface SummarizeTextRequest {
 }
 
 /**
- * Transcription request
- */
-export interface TranscribeRequest {
-  recordUuid: string; // UUID of audio/video record to transcribe
-  language?: string;
-  timestamps?: boolean;
-}
-
-/**
- * Transcription result
- */
-export interface TranscriptionResult {
-  text: string;
-  confidence?: number;
-  language?: string;
-}
-
-/**
  * Available chat engines/models
  */
 export interface ChatEngine {

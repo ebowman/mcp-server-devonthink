@@ -8,7 +8,7 @@
 
 import { executeJxa } from "../../../applescript/execute.js";
 
-export interface SimpleAIStatus {
+export interface AIStatus {
   success: boolean;
   devonthinkRunning: boolean;
   aiEnginesConfigured: string[];
@@ -19,7 +19,7 @@ export interface SimpleAIStatus {
 /**
  * Simple, fast check for AI service availability using proven working pattern
  */
-export async function checkAIServiceSimple(): Promise<SimpleAIStatus> {
+export async function checkAIServiceSimple(): Promise<AIStatus> {
   // Safety check for test environments where executeJxa might be mocked
   try {
   const script = `
@@ -86,9 +86,9 @@ export async function checkAIServiceSimple(): Promise<SimpleAIStatus> {
     })();
   `;
 
-  const result = await executeJxa<SimpleAIStatus>(script);
+  const result = await executeJxa<AIStatus>(script);
   
-  // Ensure we always return a valid SimpleAIStatus object
+  // Ensure we always return a valid AIStatus object
   if (!result || typeof result !== "object") {
     return {
       success: false,
@@ -116,7 +116,7 @@ export async function checkAIServiceSimple(): Promise<SimpleAIStatus> {
 /**
  * Gets user-friendly status message (NEVER mentions JXA technical details)
  */
-export function getSimpleStatusMessage(status: SimpleAIStatus): string {
+export function getSimpleStatusMessage(status: AIStatus): string {
   if (!status.success) {
     // Sanitize error message - remove any JXA technical details
     const sanitizedError = (status.error || 'Unknown error')
@@ -145,7 +145,7 @@ export function getSimpleStatusMessage(status: SimpleAIStatus): string {
 /**
  * Quick engine selection - returns null if no engines available
  */
-export function selectSimpleEngine(status: SimpleAIStatus, preferredEngine?: string): string | null {
+export function selectSimpleEngine(status: AIStatus, preferredEngine?: string): string | null {
   if (!status.success || !status.devonthinkRunning || status.aiEnginesConfigured.length === 0) {
     return null;
   }

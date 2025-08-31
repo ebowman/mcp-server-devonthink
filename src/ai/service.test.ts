@@ -224,38 +224,6 @@ describe('DevonThinkAIService', () => {
     });
   });
 
-  describe('transcribeRecord', () => {
-    it('should transcribe record successfully', async () => {
-      const mockResponse = {
-        success: true,
-        transcription: {
-          text: 'Hello, this is a test transcription.',
-          confidence: 0.95,
-          language: 'en'
-        }
-      };
-
-      vi.mocked(executeModule.executeJxa).mockResolvedValueOnce(mockResponse);
-
-      const result = await service.transcribeRecord({
-        recordUuid: 'audio-uuid',
-        language: 'en',
-        timestamps: true
-      });
-
-      expect(result).toEqual({
-        text: 'Hello, this is a test transcription.',
-        confidence: 0.95,
-        language: 'en'
-      });
-
-      const calledScript = vi.mocked(executeModule.executeJxa).mock.calls[0][0];
-      expect(calledScript).toContain('transcribe');
-      expect(calledScript).toContain('audio-uuid');
-      expect(calledScript).toContain('timestamps');
-    });
-  });
-
   describe('checkHealth', () => {
     it('should return healthy status when AI is available', async () => {
       const mockResponse = {
