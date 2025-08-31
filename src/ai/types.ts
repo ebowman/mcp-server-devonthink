@@ -73,14 +73,6 @@ export interface SummarizeRequest {
 }
 
 /**
- * Text summarization request
- */
-export interface SummarizeTextRequest {
-  text: string;
-  summaryStyle?: SummaryStyle;
-}
-
-/**
  * Available chat engines/models
  */
 export interface ChatEngine {
