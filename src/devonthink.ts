@@ -33,6 +33,13 @@ import { duplicateRecordTool } from "./tools/duplicateRecord.js";
 import { convertRecordTool } from "./tools/convertRecord.js";
 import { updateRecordContentTool } from "./tools/updateRecordContent.js";
 
+// AI-powered tools
+import { askAiAboutDocumentsTool } from "./tools/ai/askAiAboutRecords.js";
+import { createSummaryDocumentTool } from "./tools/ai/createSummaryDocument.js";
+import { classifyDocumentTool } from "./tools/ai/classifyRecord.js";
+import { checkAIHealthTool } from "./tools/ai/checkAIHealth.js";
+import { findSimilarTool } from "./tools/ai/findSimilar.js";
+
 export const createServer = async () => {
   const server = new Server(
     {
@@ -49,6 +56,7 @@ export const createServer = async () => {
   );
 
   const tools: Tool[] = [
+    // Core tools
     isRunningTool,
     createRecordTool,
     deleteRecordTool,
@@ -72,6 +80,13 @@ export const createServer = async () => {
     duplicateRecordTool,
     convertRecordTool,
     updateRecordContentTool,
+    
+    // AI-powered tools
+    checkAIHealthTool,
+    askAiAboutDocumentsTool,
+    createSummaryDocumentTool,
+    classifyDocumentTool,
+    findSimilarTool,
   ];
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
