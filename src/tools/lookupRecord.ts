@@ -17,7 +17,12 @@ const LookupRecordSchema = z
 			.boolean()
 			.optional()
 			.describe("Match any tag instead of all (for lookupType 'tags')"),
-		databaseName: z.string().optional().describe("Database to search in (optional)"),
+		databaseName: z
+			.string()
+			.optional()
+			.describe(
+				"Database to scope the lookup to. If omitted, every open database is searched.",
+			),
 		limit: z.number().optional().describe("Maximum results to return (optional)"),
 	})
 	.strict();
@@ -51,73 +56,102 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
     (() => {
       const theApp = Application("DEVONthink");
       theApp.includeStandardAdditions = true;
-      
+
       try {
-        let searchDatabase;
-        
-        // Determine search database
+        // Determine the set of databases to search.
+        // If a databaseName is supplied, scope to that one database.
+        // Otherwise, iterate every open database — DEVONthink's lookupRecordsWith*
+        // APIs do not natively support "all databases" the way search() does, so we
+        // must call them once per database and union the results.
+        let searchDatabases;
         if ("${databaseName || ""}") {
           const databases = theApp.databases();
-          searchDatabase = databases.find(db => db.name() === "${databaseName}");
-          if (!searchDatabase) {
+          const targetDb = databases.find(db => db.name() === "${databaseName}");
+          if (!targetDb) {
             return JSON.stringify({
               success: false,
               error: "Database not found: ${databaseName}"
             });
           }
+          searchDatabases = [targetDb];
         } else {
-          searchDatabase = theApp.currentDatabase();
+          searchDatabases = theApp.databases();
         }
-        
-        let searchResults;
-        const searchOptions = { in: searchDatabase };
-        
-        // Perform the appropriate lookup
-        switch ("${lookupType}") {
-          case "filename":
-            searchResults = theApp.lookupRecordsWithFile("${value}", { in: searchDatabase });
-            break;
-          case "path":
-            searchResults = theApp.lookupRecordsWithPath("${value}", { in: searchDatabase });
-            break;
-          case "url": {
-            const urlValue = "${value}";
-            const dtPrefix = "x-devonthink-item://";
-            if (urlValue.startsWith(dtPrefix)) {
-              const identifier = decodeURIComponent(urlValue.substring(dtPrefix.length));
-              const record = theApp.getRecordWithUuid(identifier);
-              if (record && record.exists()) {
-                searchResults = [record];
+
+        // lookupRecordsWith* returns AppleScript reference arrays; collect into
+        // a plain array as we go so we can dedupe by UUID across databases.
+        const seen = {};
+        let searchResults = [];
+
+        for (let dbIdx = 0; dbIdx < searchDatabases.length; dbIdx++) {
+          const searchDatabase = searchDatabases[dbIdx];
+          let dbResults;
+
+          switch ("${lookupType}") {
+            case "filename":
+              dbResults = theApp.lookupRecordsWithFile("${value}", { in: searchDatabase });
+              break;
+            case "path":
+              dbResults = theApp.lookupRecordsWithPath("${value}", { in: searchDatabase });
+              break;
+            case "url": {
+              const urlValue = "${value}";
+              const dtPrefix = "x-devonthink-item://";
+              if (urlValue.startsWith(dtPrefix)) {
+                // x-devonthink-item:// resolves globally via UUID — do it once,
+                // not per-database, then short-circuit the loop.
+                if (dbIdx === 0) {
+                  const identifier = decodeURIComponent(urlValue.substring(dtPrefix.length));
+                  const record = theApp.getRecordWithUuid(identifier);
+                  if (record && record.exists()) {
+                    dbResults = [record];
+                  } else {
+                    dbResults = [];
+                  }
+                  dbIdx = searchDatabases.length; // exit the for-loop after this iter
+                } else {
+                  dbResults = [];
+                }
               } else {
-                searchResults = [];
+                dbResults = theApp.lookupRecordsWithURL(decodeURIComponent(urlValue), { in: searchDatabase });
               }
-            } else {
-              searchResults = theApp.lookupRecordsWithURL(decodeURIComponent(urlValue), { in: searchDatabase });
+              break;
             }
-            break;
+            case "comment":
+              dbResults = theApp.lookupRecordsWithComment("${value}", { in: searchDatabase });
+              break;
+            case "contentHash":
+              dbResults = theApp.lookupRecordsWithContentHash("${value}", { in: searchDatabase });
+              break;
+            case "tags": {
+              const tagArray = ${tags ? JSON.stringify(tags) : "[]"};
+              if (tagArray.length === 0 && "${value}") {
+                tagArray.push("${value}");
+              }
+              const tagOptions = { in: searchDatabase };
+              if (${matchAnyTag}) {
+                tagOptions.any = true;
+              }
+              dbResults = theApp.lookupRecordsWithTags(tagArray, tagOptions);
+              break;
+            }
+            default:
+              return JSON.stringify({
+                success: false,
+                error: "Invalid lookup type: ${lookupType}"
+              });
           }
-          case "comment":
-            searchResults = theApp.lookupRecordsWithComment("${value}", { in: searchDatabase });
-            break;
-          case "contentHash":
-            searchResults = theApp.lookupRecordsWithContentHash("${value}", { in: searchDatabase });
-            break;
-          case "tags":
-            const tagArray = ${tags ? JSON.stringify(tags) : "[]"};
-            if (tagArray.length === 0 && "${value}") {
-              tagArray.push("${value}");
+
+          if (dbResults && dbResults.length > 0) {
+            for (let i = 0; i < dbResults.length; i++) {
+              const rec = dbResults[i];
+              const uuid = rec.uuid();
+              if (!seen[uuid]) {
+                seen[uuid] = true;
+                searchResults.push(rec);
+              }
             }
-            const tagOptions = { in: searchDatabase };
-            if (${matchAnyTag}) {
-              tagOptions.any = true;
-            }
-            searchResults = theApp.lookupRecordsWithTags(tagArray, tagOptions);
-            break;
-          default:
-            return JSON.stringify({
-              success: false,
-              error: "Invalid lookup type: ${lookupType}"
-            });
+          }
         }
         
         if (!searchResults || searchResults.length === 0) {
@@ -177,7 +211,7 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
 export const lookupRecordTool: Tool = {
 	name: "lookup_record",
 	description:
-		'Look up records in DEVONthink by a specific attribute.\n\nExample:\n{\n  "lookupType": "filename",\n  "value": "report.pdf"\n}',
+		'Look up records in DEVONthink by a specific attribute.\n\nBy default the lookup spans every open database; pass "databaseName" to scope to a single database.\n\nExample:\n{\n  "lookupType": "filename",\n  "value": "report.pdf"\n}',
 	inputSchema: zodToJsonSchema(LookupRecordSchema) as ToolInput,
 	run: lookupRecord,
 };
