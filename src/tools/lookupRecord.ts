@@ -2,6 +2,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { Tool, ToolSchema } from "@modelcontextprotocol/sdk/types.js";
 import { executeJxa } from "../applescript/execute.js";
+import { escapeStringForJXA, formatValueForJXA, isJXASafeString } from "../utils/escapeString.js";
 
 const ToolInputSchema = ToolSchema.shape.inputSchema;
 type ToolInput = z.infer<typeof ToolInputSchema>;
@@ -52,10 +53,44 @@ interface LookupResult {
 const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => {
 	const { lookupType, value, tags, matchAnyTag, databaseName, limit = 50 } = input;
 
+	// Validate every string that gets interpolated into the JXA script. Control
+	// characters can't be safely escaped, so we reject them at the boundary.
+	if (!isJXASafeString(value)) {
+		return { success: false, error: "Value contains invalid characters" };
+	}
+	if (databaseName !== undefined && !isJXASafeString(databaseName)) {
+		return { success: false, error: "Database name contains invalid characters" };
+	}
+	if (tags) {
+		for (const tag of tags) {
+			if (!isJXASafeString(tag)) {
+				return { success: false, error: "Tag contains invalid characters" };
+			}
+		}
+	}
+
+	// Build safely-escaped JXA literals up front. The script template references
+	// these `p*` constants and never re-interpolates raw user input.
+	const pValue = formatValueForJXA(value);
+	const pDatabaseName = formatValueForJXA(databaseName);
+	const pLookupType = formatValueForJXA(lookupType);
+	const pTagsLiteral = tags
+		? `[${tags.map((t) => `"${escapeStringForJXA(t)}"`).join(", ")}]`
+		: "[]";
+	const pMatchAnyTag = matchAnyTag === true;
+	const pLimit = typeof limit === "number" ? limit : 50;
+
 	const script = `
     (() => {
       const theApp = Application("DEVONthink");
       theApp.includeStandardAdditions = true;
+
+      const pValue = ${pValue};
+      const pDatabaseName = ${pDatabaseName};
+      const pLookupType = ${pLookupType};
+      const pTags = ${pTagsLiteral};
+      const pMatchAnyTag = ${pMatchAnyTag};
+      const pLimit = ${pLimit};
 
       try {
         // Determine the set of databases to search.
@@ -64,13 +99,13 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
         // APIs do not natively support "all databases" the way search() does, so we
         // must call them once per database and union the results.
         let searchDatabases;
-        if ("${databaseName || ""}") {
+        if (pDatabaseName) {
           const databases = theApp.databases();
-          const targetDb = databases.find(db => db.name() === "${databaseName}");
+          const targetDb = databases.find(db => db.name() === pDatabaseName);
           if (!targetDb) {
             return JSON.stringify({
               success: false,
-              error: "Database not found: ${databaseName}"
+              error: "Database not found: " + pDatabaseName
             });
           }
           searchDatabases = [targetDb];
@@ -87,21 +122,20 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
           const searchDatabase = searchDatabases[dbIdx];
           let dbResults;
 
-          switch ("${lookupType}") {
+          switch (pLookupType) {
             case "filename":
-              dbResults = theApp.lookupRecordsWithFile("${value}", { in: searchDatabase });
+              dbResults = theApp.lookupRecordsWithFile(pValue, { in: searchDatabase });
               break;
             case "path":
-              dbResults = theApp.lookupRecordsWithPath("${value}", { in: searchDatabase });
+              dbResults = theApp.lookupRecordsWithPath(pValue, { in: searchDatabase });
               break;
             case "url": {
-              const urlValue = "${value}";
               const dtPrefix = "x-devonthink-item://";
-              if (urlValue.startsWith(dtPrefix)) {
+              if (pValue.startsWith(dtPrefix)) {
                 // x-devonthink-item:// resolves globally via UUID — do it once,
                 // not per-database, then short-circuit the loop.
                 if (dbIdx === 0) {
-                  const identifier = decodeURIComponent(urlValue.substring(dtPrefix.length));
+                  const identifier = decodeURIComponent(pValue.substring(dtPrefix.length));
                   const record = theApp.getRecordWithUuid(identifier);
                   if (record && record.exists()) {
                     dbResults = [record];
@@ -113,23 +147,23 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
                   dbResults = [];
                 }
               } else {
-                dbResults = theApp.lookupRecordsWithURL(decodeURIComponent(urlValue), { in: searchDatabase });
+                dbResults = theApp.lookupRecordsWithURL(decodeURIComponent(pValue), { in: searchDatabase });
               }
               break;
             }
             case "comment":
-              dbResults = theApp.lookupRecordsWithComment("${value}", { in: searchDatabase });
+              dbResults = theApp.lookupRecordsWithComment(pValue, { in: searchDatabase });
               break;
             case "contentHash":
-              dbResults = theApp.lookupRecordsWithContentHash("${value}", { in: searchDatabase });
+              dbResults = theApp.lookupRecordsWithContentHash(pValue, { in: searchDatabase });
               break;
             case "tags": {
-              const tagArray = ${tags ? JSON.stringify(tags) : "[]"};
-              if (tagArray.length === 0 && "${value}") {
-                tagArray.push("${value}");
+              const tagArray = pTags.slice();
+              if (tagArray.length === 0 && pValue) {
+                tagArray.push(pValue);
               }
               const tagOptions = { in: searchDatabase };
-              if (${matchAnyTag}) {
+              if (pMatchAnyTag) {
                 tagOptions.any = true;
               }
               dbResults = theApp.lookupRecordsWithTags(tagArray, tagOptions);
@@ -138,7 +172,7 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
             default:
               return JSON.stringify({
                 success: false,
-                error: "Invalid lookup type: ${lookupType}"
+                error: "Invalid lookup type: " + pLookupType
               });
           }
 
@@ -153,7 +187,7 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
             }
           }
         }
-        
+
         if (!searchResults || searchResults.length === 0) {
           return JSON.stringify({
             success: true,
@@ -161,9 +195,9 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
             totalCount: 0
           });
         }
-        
+
         // Limit results and extract properties
-        const limitedResults = searchResults.slice(0, ${limit});
+        const limitedResults = searchResults.slice(0, pLimit);
         const results = limitedResults.map(record => {
           const result = {
             id: record.id(),
@@ -177,20 +211,20 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
             tags: record.tags(),
             size: record.size()
           };
-          
+
           // Include URL if available
           if (record.url && record.url()) {
             result.url = record.url();
           }
-          
+
           // Include comment if available
           if (record.comment && record.comment()) {
             result.comment = record.comment();
           }
-          
+
           return result;
         });
-        
+
         return JSON.stringify({
           success: true,
           results: results,

@@ -37,9 +37,9 @@ describe("lookupRecordTool", () => {
 			});
 
 			const [script] = executeJxaMock.mock.calls[0];
-			// The conditional checks "${databaseName || ''}" — with no databaseName the
-			// runtime condition is `if ("")`, so the scoped branch never runs.
-			expect(script).toContain('if ("")');
+			// pDatabaseName is interpolated as `null` when undefined, which is falsy
+			// at runtime, so the scoped branch never runs.
+			expect(script).toContain("const pDatabaseName = null;");
 		});
 	});
 
@@ -52,9 +52,9 @@ describe("lookupRecordTool", () => {
 			});
 
 			const [script] = executeJxaMock.mock.calls[0];
-			expect(script).toContain('db.name() === "MyDB"');
+			expect(script).toContain('const pDatabaseName = "MyDB";');
+			expect(script).toContain("db.name() === pDatabaseName");
 			expect(script).toContain("searchDatabases = [targetDb];");
-			expect(script).toContain("Database not found: MyDB");
 		});
 	});
 
@@ -62,8 +62,9 @@ describe("lookupRecordTool", () => {
 		it("dispatches to lookupRecordsWithFile for filename", async () => {
 			await lookupRecordTool.run?.({ lookupType: "filename", value: "report.pdf" });
 			const [script] = executeJxaMock.mock.calls[0];
+			expect(script).toContain('const pValue = "report.pdf";');
 			expect(script).toContain(
-				'theApp.lookupRecordsWithFile("report.pdf", { in: searchDatabase })',
+				"theApp.lookupRecordsWithFile(pValue, { in: searchDatabase })",
 			);
 		});
 
@@ -71,7 +72,7 @@ describe("lookupRecordTool", () => {
 			await lookupRecordTool.run?.({ lookupType: "path", value: "/Inbox/Note" });
 			const [script] = executeJxaMock.mock.calls[0];
 			expect(script).toContain(
-				'theApp.lookupRecordsWithPath("/Inbox/Note", { in: searchDatabase })',
+				"theApp.lookupRecordsWithPath(pValue, { in: searchDatabase })",
 			);
 		});
 
@@ -79,7 +80,7 @@ describe("lookupRecordTool", () => {
 			await lookupRecordTool.run?.({ lookupType: "comment", value: "hello" });
 			const [script] = executeJxaMock.mock.calls[0];
 			expect(script).toContain(
-				'theApp.lookupRecordsWithComment("hello", { in: searchDatabase })',
+				"theApp.lookupRecordsWithComment(pValue, { in: searchDatabase })",
 			);
 		});
 
@@ -87,7 +88,7 @@ describe("lookupRecordTool", () => {
 			await lookupRecordTool.run?.({ lookupType: "contentHash", value: "abc123" });
 			const [script] = executeJxaMock.mock.calls[0];
 			expect(script).toContain(
-				'theApp.lookupRecordsWithContentHash("abc123", { in: searchDatabase })',
+				"theApp.lookupRecordsWithContentHash(pValue, { in: searchDatabase })",
 			);
 		});
 
@@ -99,8 +100,9 @@ describe("lookupRecordTool", () => {
 				matchAnyTag: true,
 			});
 			const [script] = executeJxaMock.mock.calls[0];
-			expect(script).toContain('const tagArray = ["a","b"];');
-			expect(script).toContain("if (true) {");
+			expect(script).toContain('const pTags = ["a", "b"];');
+			expect(script).toContain("const pMatchAnyTag = true;");
+			expect(script).toContain("if (pMatchAnyTag) {");
 			expect(script).toContain("tagOptions.any = true;");
 			expect(script).toContain("theApp.lookupRecordsWithTags(tagArray, tagOptions);");
 		});
@@ -125,7 +127,7 @@ describe("lookupRecordTool", () => {
 			});
 			const [script] = executeJxaMock.mock.calls[0];
 			expect(script).toContain(
-				"theApp.lookupRecordsWithURL(decodeURIComponent(urlValue), { in: searchDatabase })",
+				"theApp.lookupRecordsWithURL(decodeURIComponent(pValue), { in: searchDatabase })",
 			);
 		});
 	});
@@ -135,5 +137,86 @@ describe("lookupRecordTool", () => {
 		const [script] = executeJxaMock.mock.calls[0];
 		expect(script).toContain("const seen = {};");
 		expect(script).toContain("if (!seen[uuid]) {");
+	});
+
+	describe("input escaping and validation", () => {
+		it("escapes embedded double-quotes in value", async () => {
+			await lookupRecordTool.run?.({
+				lookupType: "filename",
+				value: 'evil"injection.md',
+			});
+			const [script] = executeJxaMock.mock.calls[0];
+			// The escaped form must appear; the raw form (which would break out of
+			// the JXA string literal) must not appear adjacent to its surrounding quotes.
+			expect(script).toContain('const pValue = "evil\\"injection.md";');
+			expect(executeJxaMock).toHaveBeenCalledTimes(1);
+		});
+
+		it("escapes backslashes and newlines in value", async () => {
+			await lookupRecordTool.run?.({
+				lookupType: "comment",
+				value: "line1\nline2\\path",
+			});
+			const [script] = executeJxaMock.mock.calls[0];
+			expect(script).toContain('const pValue = "line1\\nline2\\\\path";');
+		});
+
+		it("escapes embedded double-quotes in databaseName", async () => {
+			await lookupRecordTool.run?.({
+				lookupType: "filename",
+				value: "x.md",
+				databaseName: 'odd"name',
+			});
+			const [script] = executeJxaMock.mock.calls[0];
+			expect(script).toContain('const pDatabaseName = "odd\\"name";');
+		});
+
+		it("escapes embedded double-quotes in tags", async () => {
+			await lookupRecordTool.run?.({
+				lookupType: "tags",
+				value: "",
+				tags: ['weird"tag', "plain"],
+			});
+			const [script] = executeJxaMock.mock.calls[0];
+			expect(script).toContain('const pTags = ["weird\\"tag", "plain"];');
+		});
+
+		it("rejects value containing a control character before invoking JXA", async () => {
+			const result = await lookupRecordTool.run?.({
+				lookupType: "filename",
+				value: "bad\x00value",
+			});
+			expect(result).toEqual({
+				success: false,
+				error: "Value contains invalid characters",
+			});
+			expect(executeJxaMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects databaseName containing a control character before invoking JXA", async () => {
+			const result = await lookupRecordTool.run?.({
+				lookupType: "filename",
+				value: "x.md",
+				databaseName: "bad\x01db",
+			});
+			expect(result).toEqual({
+				success: false,
+				error: "Database name contains invalid characters",
+			});
+			expect(executeJxaMock).not.toHaveBeenCalled();
+		});
+
+		it("rejects tag containing a control character before invoking JXA", async () => {
+			const result = await lookupRecordTool.run?.({
+				lookupType: "tags",
+				value: "",
+				tags: ["ok", "bad\x07tag"],
+			});
+			expect(result).toEqual({
+				success: false,
+				error: "Tag contains invalid characters",
+			});
+			expect(executeJxaMock).not.toHaveBeenCalled();
+		});
 	});
 });
