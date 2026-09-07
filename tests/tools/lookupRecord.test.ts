@@ -63,33 +63,29 @@ describe("lookupRecordTool", () => {
 			await lookupRecordTool.run?.({ lookupType: "filename", value: "report.pdf" });
 			const [script] = executeJxaMock.mock.calls[0];
 			expect(script).toContain('const pValue = "report.pdf";');
-			expect(script).toContain(
-				"theApp.lookupRecordsWithFile(pValue, { in: searchDatabase })",
-			);
+			expect(script).toContain('fileOptions["in"] = searchDatabase;');
+			expect(script).toContain("theApp.lookupRecordsWithFile(pValue, fileOptions)");
 		});
 
 		it("dispatches to lookupRecordsWithPath for path", async () => {
 			await lookupRecordTool.run?.({ lookupType: "path", value: "/Inbox/Note" });
 			const [script] = executeJxaMock.mock.calls[0];
-			expect(script).toContain(
-				"theApp.lookupRecordsWithPath(pValue, { in: searchDatabase })",
-			);
+			expect(script).toContain('pathOptions["in"] = searchDatabase;');
+			expect(script).toContain("theApp.lookupRecordsWithPath(pValue, pathOptions)");
 		});
 
 		it("dispatches to lookupRecordsWithComment for comment", async () => {
 			await lookupRecordTool.run?.({ lookupType: "comment", value: "hello" });
 			const [script] = executeJxaMock.mock.calls[0];
-			expect(script).toContain(
-				"theApp.lookupRecordsWithComment(pValue, { in: searchDatabase })",
-			);
+			expect(script).toContain('commentOptions["in"] = searchDatabase;');
+			expect(script).toContain("theApp.lookupRecordsWithComment(pValue, commentOptions)");
 		});
 
 		it("dispatches to lookupRecordsWithContentHash for contentHash", async () => {
 			await lookupRecordTool.run?.({ lookupType: "contentHash", value: "abc123" });
 			const [script] = executeJxaMock.mock.calls[0];
-			expect(script).toContain(
-				"theApp.lookupRecordsWithContentHash(pValue, { in: searchDatabase })",
-			);
+			expect(script).toContain('hashOptions["in"] = searchDatabase;');
+			expect(script).toContain("theApp.lookupRecordsWithContentHash(pValue, hashOptions)");
 		});
 
 		it("dispatches to lookupRecordsWithTags for tags and honors matchAnyTag", async () => {
@@ -103,13 +99,14 @@ describe("lookupRecordTool", () => {
 			expect(script).toContain('const pTags = ["a", "b"];');
 			expect(script).toContain("const pMatchAnyTag = true;");
 			expect(script).toContain("if (pMatchAnyTag) {");
-			expect(script).toContain("tagOptions.any = true;");
+			expect(script).toContain('tagOptions["any"] = true;');
+			expect(script).toContain('tagOptions["in"] = searchDatabase;');
 			expect(script).toContain("theApp.lookupRecordsWithTags(tagArray, tagOptions);");
 		});
 	});
 
 	describe("url lookup", () => {
-		it("uses getRecordWithUuid shortcut for x-devonthink-item URLs and short-circuits the db loop", async () => {
+		it("resolves x-devonthink-item URLs globally, before the per-database loop", async () => {
 			await lookupRecordTool.run?.({
 				lookupType: "url",
 				value: "x-devonthink-item://1234-5678",
@@ -117,7 +114,42 @@ describe("lookupRecordTool", () => {
 			const [script] = executeJxaMock.mock.calls[0];
 			expect(script).toContain('const dtPrefix = "x-devonthink-item://";');
 			expect(script).toContain("theApp.getRecordWithUuid(identifier);");
-			expect(script).toContain("dbIdx = searchDatabases.length;");
+
+			// The x-devonthink-item handling must appear before the per-database
+			// loop starts, not inside it (maintainer's requested restructuring).
+			const dtHandlingIndex = script.indexOf(
+				'if (pLookupType === "url" && pValue.startsWith(dtPrefix))',
+			);
+			const loopIndex = script.indexOf(
+				"for (let dbIdx = 0; dbIdx < searchDatabases.length; dbIdx++)",
+			);
+			expect(dtHandlingIndex).toBeGreaterThan(-1);
+			expect(loopIndex).toBeGreaterThan(-1);
+			expect(dtHandlingIndex).toBeLessThan(loopIndex);
+		});
+
+		it("guards the per-database loop with a resolvedGlobally flag so it never runs for x-devonthink-item URLs", async () => {
+			await lookupRecordTool.run?.({
+				lookupType: "url",
+				value: "x-devonthink-item://1234-5678",
+			});
+			const [script] = executeJxaMock.mock.calls[0];
+			expect(script).toContain("let resolvedGlobally = false;");
+			expect(script).toContain("resolvedGlobally = true;");
+			expect(script).toContain("if (!resolvedGlobally) {");
+		});
+
+		it("does not call getRecordWithUuid from within the per-database url case", async () => {
+			await lookupRecordTool.run?.({
+				lookupType: "url",
+				value: "https://example.com/page",
+			});
+			const [script] = executeJxaMock.mock.calls[0];
+			const loopIndex = script.indexOf(
+				"for (let dbIdx = 0; dbIdx < searchDatabases.length; dbIdx++)",
+			);
+			const loopBody = script.slice(loopIndex);
+			expect(loopBody).not.toContain("getRecordWithUuid");
 		});
 
 		it("falls back to lookupRecordsWithURL for non-DT URLs", async () => {
@@ -126,8 +158,9 @@ describe("lookupRecordTool", () => {
 				value: "https://example.com/page",
 			});
 			const [script] = executeJxaMock.mock.calls[0];
+			expect(script).toContain('urlOptions["in"] = searchDatabase;');
 			expect(script).toContain(
-				"theApp.lookupRecordsWithURL(decodeURIComponent(pValue), { in: searchDatabase })",
+				"theApp.lookupRecordsWithURL(decodeURIComponent(pValue), urlOptions)",
 			);
 		});
 	});

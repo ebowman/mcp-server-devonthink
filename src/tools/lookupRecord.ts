@@ -118,71 +118,92 @@ const lookupRecord = async (input: LookupRecordInput): Promise<LookupResult> => 
         const seen = {};
         let searchResults = [];
 
-        for (let dbIdx = 0; dbIdx < searchDatabases.length; dbIdx++) {
-          const searchDatabase = searchDatabases[dbIdx];
-          let dbResults;
-
-          switch (pLookupType) {
-            case "filename":
-              dbResults = theApp.lookupRecordsWithFile(pValue, { in: searchDatabase });
-              break;
-            case "path":
-              dbResults = theApp.lookupRecordsWithPath(pValue, { in: searchDatabase });
-              break;
-            case "url": {
-              const dtPrefix = "x-devonthink-item://";
-              if (pValue.startsWith(dtPrefix)) {
-                // x-devonthink-item:// resolves globally via UUID — do it once,
-                // not per-database, then short-circuit the loop.
-                if (dbIdx === 0) {
-                  const identifier = decodeURIComponent(pValue.substring(dtPrefix.length));
-                  const record = theApp.getRecordWithUuid(identifier);
-                  if (record && record.exists()) {
-                    dbResults = [record];
-                  } else {
-                    dbResults = [];
-                  }
-                  dbIdx = searchDatabases.length; // exit the for-loop after this iter
-                } else {
-                  dbResults = [];
-                }
-              } else {
-                dbResults = theApp.lookupRecordsWithURL(decodeURIComponent(pValue), { in: searchDatabase });
-              }
-              break;
-            }
-            case "comment":
-              dbResults = theApp.lookupRecordsWithComment(pValue, { in: searchDatabase });
-              break;
-            case "contentHash":
-              dbResults = theApp.lookupRecordsWithContentHash(pValue, { in: searchDatabase });
-              break;
-            case "tags": {
-              const tagArray = pTags.slice();
-              if (tagArray.length === 0 && pValue) {
-                tagArray.push(pValue);
-              }
-              const tagOptions = { in: searchDatabase };
-              if (pMatchAnyTag) {
-                tagOptions.any = true;
-              }
-              dbResults = theApp.lookupRecordsWithTags(tagArray, tagOptions);
-              break;
-            }
-            default:
-              return JSON.stringify({
-                success: false,
-                error: "Invalid lookup type: " + pLookupType
-              });
+        // x-devonthink-item:// URLs resolve globally via UUID — this is not a
+        // per-database concept, so handle it once here, before the per-database
+        // loop, rather than inside it. If the identifier doesn't resolve to an
+        // existing record, the correct result is an empty set: searching every
+        // other database for the same x-devonthink-item URL makes no sense.
+        let resolvedGlobally = false;
+        const dtPrefix = "x-devonthink-item://";
+        if (pLookupType === "url" && pValue.startsWith(dtPrefix)) {
+          resolvedGlobally = true;
+          const identifier = decodeURIComponent(pValue.substring(dtPrefix.length));
+          const record = theApp.getRecordWithUuid(identifier);
+          if (record && record.exists()) {
+            const uuid = record.uuid();
+            seen[uuid] = true;
+            searchResults.push(record);
           }
+        }
 
-          if (dbResults && dbResults.length > 0) {
-            for (let i = 0; i < dbResults.length; i++) {
-              const rec = dbResults[i];
-              const uuid = rec.uuid();
-              if (!seen[uuid]) {
-                seen[uuid] = true;
-                searchResults.push(rec);
+        // Only run the per-database loop when we haven't already resolved the
+        // lookup globally above.
+        if (!resolvedGlobally) {
+          for (let dbIdx = 0; dbIdx < searchDatabases.length; dbIdx++) {
+            const searchDatabase = searchDatabases[dbIdx];
+            let dbResults;
+
+            switch (pLookupType) {
+              case "filename": {
+                const fileOptions = {};
+                fileOptions["in"] = searchDatabase;
+                dbResults = theApp.lookupRecordsWithFile(pValue, fileOptions);
+                break;
+              }
+              case "path": {
+                const pathOptions = {};
+                pathOptions["in"] = searchDatabase;
+                dbResults = theApp.lookupRecordsWithPath(pValue, pathOptions);
+                break;
+              }
+              case "url": {
+                // Non-DEVONthink URLs are looked up per-database via the url
+                // property; x-devonthink-item:// URLs are already handled above.
+                const urlOptions = {};
+                urlOptions["in"] = searchDatabase;
+                dbResults = theApp.lookupRecordsWithURL(decodeURIComponent(pValue), urlOptions);
+                break;
+              }
+              case "comment": {
+                const commentOptions = {};
+                commentOptions["in"] = searchDatabase;
+                dbResults = theApp.lookupRecordsWithComment(pValue, commentOptions);
+                break;
+              }
+              case "contentHash": {
+                const hashOptions = {};
+                hashOptions["in"] = searchDatabase;
+                dbResults = theApp.lookupRecordsWithContentHash(pValue, hashOptions);
+                break;
+              }
+              case "tags": {
+                const tagArray = pTags.slice();
+                if (tagArray.length === 0 && pValue) {
+                  tagArray.push(pValue);
+                }
+                const tagOptions = {};
+                tagOptions["in"] = searchDatabase;
+                if (pMatchAnyTag) {
+                  tagOptions["any"] = true;
+                }
+                dbResults = theApp.lookupRecordsWithTags(tagArray, tagOptions);
+                break;
+              }
+              default:
+                return JSON.stringify({
+                  success: false,
+                  error: "Invalid lookup type: " + pLookupType
+                });
+            }
+
+            if (dbResults && dbResults.length > 0) {
+              for (let i = 0; i < dbResults.length; i++) {
+                const rec = dbResults[i];
+                const uuid = rec.uuid();
+                if (!seen[uuid]) {
+                  seen[uuid] = true;
+                  searchResults.push(rec);
+                }
               }
             }
           }
